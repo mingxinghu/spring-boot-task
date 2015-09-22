@@ -8,7 +8,8 @@ import com.lifeccp.domain.CasePoolHospital;
 import com.lifeccp.exception.RuleNotExistException;
 import com.lifeccp.repository.*;
 import com.lifeccp.util.AppConstant;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,8 +22,7 @@ import java.util.*;
 @Service
 public class RuleRunnerService {
     private String batchNo;
-    public Boolean isFree = true;
-    private Logger logger = Logger.getLogger(this.getClass());
+    private Logger logger = LogManager.getLogger(this.getClass());
 
     @Autowired
     private AssignRuleRepository assignRuleRepository;
@@ -38,28 +38,27 @@ public class RuleRunnerService {
 
     public void execute(String batchNo) throws Exception {
         this.batchNo = batchNo;
-        this.isFree = false;
         //缓存院间和院内规则
         Map<String, AssignRule> outsideRuleMap = new HashMap<String, AssignRule>();
         Map<String, AssignRule> insideRuleMap = new HashMap<String, AssignRule>();
         List<AssignRule> allRules = assignRuleRepository.findByEnabled(true);
         if (null == allRules || allRules.size() <= 0) {
-            throw new RuleNotExistException("runner["+batchNo+"] ---> has no rule!");
+            throw new RuleNotExistException("Running["+batchNo+"] ---> has no rule!");
         }
         allRules.forEach( assignRule -> {
             String key = assignRule.getFromId() + AppConstant.SPECHARS_UNDERLINE + assignRule.getDeviceType();
             if (assignRule.getRuleType() == AppConstant.ASSIGN_RULE_TYPE_ENTERPRISE_OUTSIDE || assignRule.getRuleType() == AppConstant.ASSIGN_RULE_TYPE_ENTERPRISE_INSIDE) {
                 if (null != outsideRuleMap.get(key)){
-                    logger.error("runner["+batchNo+"] ---> rule[fromId:"+assignRule.getFromId()+";deviceType:"+assignRule.getDeviceType()+"] is duplicate!");
+                    logger.error("Running[{}] ---> rule[fromId:{};deviceType:{}] is duplicate!", batchNo, assignRule.getFromId(), assignRule.getDeviceType());
                 }
                 outsideRuleMap.put(key, assignRule);
             } else if (assignRule.getRuleType() == AppConstant.ASSIGN_RULE_TYPE_HOSPITAL_INSIDE) {
                 if (null != insideRuleMap.get(key)){
-                    logger.error("runner["+batchNo+"] ---> rule[fromId:"+assignRule.getFromId()+";deviceType:"+assignRule.getDeviceType()+"] is duplicate!");
+                    logger.error("Running[{}] ---> rule[fromId:{};deviceType:{}] is duplicate!", batchNo, assignRule.getFromId(), assignRule.getDeviceType());
                 }
                 insideRuleMap.put(key, assignRule);
             } else {
-                logger.error("runner["+batchNo+"] ---> rule[id:"+assignRule.getId()+"] unknow type!");
+                logger.error("Running[{}] ---> rule[id:{}] unknow type!", batchNo, assignRule.getId());
             }
 
         });
@@ -77,14 +76,14 @@ public class RuleRunnerService {
                 //获取case检查方法
                 String deviceType = deviceTypeMap.get(casePool.getCaseUid());
                 if (null == deviceType || deviceType.length() <= 0) {
-                    logger.error("runner["+batchNo+"] ---> casePool[id:" + casePool.getId() + ";uid:" + casePool.getCaseUid() + "] has no device type!");
+                    logger.error("Running[{}] ---> casePool[id:{};uid:{}] has no device type!", batchNo, casePool.getId(), casePool.getCaseUid());
                     updateCasePoolAction(casePool, AppConstant.CASEPOOL_ACTION_UNKNOW);
                     continue;
                 }
                 //获取case匹配的规则
                 AssignRule matchRule = outsideRuleMap.get(casePool.getHospitalId() + AppConstant.SPECHARS_UNDERLINE + deviceType);
                 if (null == matchRule) {
-                    logger.error("runner["+batchNo+"] ---> casePool[id:" + casePool.getId() + ";hospitalId:" + casePool.getHospitalId() + ";deviceType:"+deviceType+"] has no match rule!");
+                    logger.error("Running[{}] ---> casePool[id:{};hospitalId:{};deviceType:{}] has no match of rule!", batchNo, casePool.getId(), casePool.getHospitalId(), deviceType);
                     updateCasePoolAction(casePool, AppConstant.CASEPOOL_ACTION_UNKNOW);
                     continue;
                 }
@@ -106,7 +105,7 @@ public class RuleRunnerService {
                 //获取case匹配的规则
                 AssignRule matchRule = insideRuleMap.get(casePoolHospital.getHospitalId() + AppConstant.SPECHARS_UNDERLINE + sourceBean.getDeviceType());
                 if (null == matchRule) {
-                    logger.error("casePoolHospital[id:" + casePoolHospital.getId() + ";hospitalId:" + casePoolHospital.getHospitalId() + ";deviceType:"+sourceBean.getDeviceType()+"] has no match rule!");
+                    logger.error("Running[{}] ---> casePoolHospital[id:{};hospitalId:{};deviceType:{}] has no match of rule!", batchNo, casePoolHospital.getId(), casePoolHospital.getHospitalId(), sourceBean.getDeviceType());
                     updateCasePoolHospitalStatus(casePoolHospital, AppConstant.CASEPOOLHOSPITAL_STATUS_UNKNOW);
                     continue;
                 }
